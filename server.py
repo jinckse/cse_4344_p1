@@ -1,3 +1,9 @@
+##@package server.py
+# Simple HTTP server implementation.
+# TODO: Scale HTTP messages and flesh out, start threading, and
+# resolve error fall out after successful run
+##@author Jarrod Nix
+
 import socket
 import os
 import sys
@@ -6,13 +12,18 @@ import threading
 #
 # CONSTANTS
 #
+
 HOST = ''
 PORT = sys.argv[1]
+MAX_PACKET = 1024
 
 #
 # FUNCTIONS
 #
 
+## Used to launch new threads for each client
+#
+# TODO: Needs testing
 def clientThread(conn):
 
 	# Send welcome message
@@ -21,7 +32,7 @@ def clientThread(conn):
 	# Keep thread alive
 	while 1:
 		# Receive requests from client
-		data = conn.recv(1024)
+		data = conn.recv(MAX_PACKET)
 		reply = 'OK...' + str(data)
 		
 		if not data:
@@ -67,32 +78,41 @@ while 1:
 	#threading.Thread(None, clientThread(conn), (conn,)).start()
 
 	try:
-		msg = conn.recv(1024)
+		msg = conn.recv(MAX_PACKET)
 		print(msg)
 		
 		if not msg:
 			conn.send(bytes('Something went wrong', 'ascii'))
 
-		filename = msg.decode('ascii')
-		location = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(filename)))
+		filename = msg.split()[1]
+		print('Server received request for file: ' + filename.decode('ascii'))
+		location = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(filename.decode('ascii')[1:])))
 
-		f = open(os.path.join(location, filename))
+		f = open(os.path.join(location, filename.decode('ascii')[1:]))
 		print('File opened successfully')
 
-		outputData = conn.recv(1024)
+		outputData = f.read()
+
+		# Send one HTTP header line into socket
+		conn.send(bytes("HTTP/1.1 200 OK\n"
+         +"Content-Type: text/html\n"
+         +"\n", 'ascii'))
 
 		# Send contents of the requested file to the client
 		for i in range(0, len(outputData)):
 			conn.send(bytes(outputData[i], 'ascii'))
 
 		# Close socket
+		print('Closing socket')
 		s.close()
-		break
 
 	except IOError:
 		# Notify user
-		print('File not found...')
+		conn.send(bytes("HTTP/1.1 404 Not Found\n"
+         +"Content-Type: text/html\n"
+         +"\n", 'ascii'))
 
 		# Close socket
+		print('Closing socket')
 		s.close()
 
