@@ -14,8 +14,15 @@ import threading
 #
 
 HOST = ''
-PORT = sys.argv[1]
 MAX_PACKET = 1024
+DEBUG = 0
+
+try:
+	PORT = sys.argv[1]
+except:
+	# Notify user
+	print('Unknown option -- usage: server.py <port_no>')
+	sys.exit(0)
 
 #
 # FUNCTIONS
@@ -23,24 +30,49 @@ MAX_PACKET = 1024
 
 ## Used to launch new threads for each client
 #
-# TODO: Needs testing
-def clientThread(conn):
+def clientThread(conn, addr):
 
-	# Send welcome message
-	conn.send(bytes('Server says: Welcome', 'ascii'))
+	print('Hostname\t\t: ', addr[0])
+	print('Socket family\t\t: ', conn.family)
+	print('Socket type\t\t: ', conn.type)
+	print('Socket protocol\t\t: ', conn.proto)
+	print('Socket timeout\t\t: ', conn.gettimeout())
+	print('Socket peer name\t: ', conn.getpeername())
 
 	# Keep thread alive
-	while 1:
-		# Receive requests from client
-		data = conn.recv(MAX_PACKET)
-		reply = 'OK...' + str(data)
+	try:
+		msg = conn.recv(MAX_PACKET)
+
+		if DEBUG: print(msg)
 		
-		if not data:
-			break
+		if msg: 
+			filename = msg.split()[1]
+			print('Server received request for file: ' + filename.decode('ascii'))
+			location = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(filename.decode('ascii')[1:])))
 
-		conn.sendall(bytes(reply, 'ascii'))
+			f = open(os.path.join(location, filename.decode('ascii')[1:]))
+			print('File opened successfully')
 
-	# Broke from loop - close socket
+			outputData = f.read()
+			
+			print('Sending response to client')
+			# Send one HTTP header line into socket
+			conn.send(bytes("HTTP/1.1 200 OK\n"
+				+"Content-Type: text/html\n"
+				+"\n", 'ascii'))
+
+			# Send contents of the requested file to the client
+			for i in range(0, len(outputData)):
+				conn.send(bytes(outputData[i], 'ascii'))
+
+	except IOError:
+		# Notify user
+		conn.send(bytes("HTTP/1.1 404 Not Found\n"
+			+"Content-Type: text/html\n"
+			+"\n", 'ascii'))
+
+	# Close socket
+	print('Closing socket')
 	conn.close()
 
 #
@@ -48,6 +80,7 @@ def clientThread(conn):
 # 
 
 # Initialize socket
+print('Initializing server')
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # Bind socket
@@ -64,55 +97,17 @@ print('Socket bind successful')
 s.listen(1)
 
 print('Socket now lisetning on port', PORT)
-print('Socket Host name: ' + socket.gethostbyname(socket.getfqdn()))
+print('Socket Host name: ' + socket.gethostname())
 
 # Wait for clients
 while 1:
 
 	# Wait to accept a connection
 	conn, addr = s.accept()
-	print ('Connected with ', addr[0] + ':' + str(addr[1]))
+	print('--')
+	print ('Connected with client', addr[0] + ':' + str(addr[1]))
 
-	#Start new thread
-	#print ('Launching new thread for client,', addr[0] + ':' + str(addr[1]))
-	#threading.Thread(None, clientThread(conn), (conn,)).start()
-
-	try:
-		msg = conn.recv(MAX_PACKET)
-		print(msg)
-		
-		if not msg:
-			conn.send(bytes('Something went wrong', 'ascii'))
-
-		filename = msg.split()[1]
-		print('Server received request for file: ' + filename.decode('ascii'))
-		location = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(filename.decode('ascii')[1:])))
-
-		f = open(os.path.join(location, filename.decode('ascii')[1:]))
-		print('File opened successfully')
-
-		outputData = f.read()
-
-		# Send one HTTP header line into socket
-		conn.send(bytes("HTTP/1.1 200 OK\n"
-         +"Content-Type: text/html\n"
-         +"\n", 'ascii'))
-
-		# Send contents of the requested file to the client
-		for i in range(0, len(outputData)):
-			conn.send(bytes(outputData[i], 'ascii'))
-
-		# Close socket
-		print('Closing socket')
-		s.close()
-
-	except IOError:
-		# Notify user
-		conn.send(bytes("HTTP/1.1 404 Not Found\n"
-         +"Content-Type: text/html\n"
-         +"\n", 'ascii'))
-
-		# Close socket
-		print('Closing socket')
-		s.close()
+	# Launch new thread
+	print ('Launching new thread for client ', addr[0] + ':' + str(addr[1]))
+	threading.Thread(None, clientThread(conn, addr)).start()
 
