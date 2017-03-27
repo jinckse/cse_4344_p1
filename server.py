@@ -1,9 +1,6 @@
 ##@package server.py
 # Simple HTTP server implementation.
-# TODO: Scale HTTP messages and flesh out, start threading, and
-# resolve error fall out after successful run
 ##@author Jarrod Nix
-
 import socket
 import os
 import sys
@@ -17,6 +14,7 @@ HOST = ''
 MAX_PACKET = 1024
 DEBUG = 0
 
+# Populate user args
 try:
 	PORT = sys.argv[1]
 except:
@@ -47,15 +45,19 @@ def clientThread(conn, addr):
 		
 		if msg: 
 			filename = msg.split()[1]
+
 			print('Server received request for file: ' + filename.decode('ascii'))
+
 			location = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(filename.decode('ascii')[1:])))
 
 			f = open(os.path.join(location, filename.decode('ascii')[1:]))
+
 			print('File opened successfully')
 
 			outputData = f.read()
 			
 			print('Sending response to client')
+
 			# Send one HTTP header line into socket
 			conn.send(bytes("HTTP/1.1 200 OK\n"
 				+"Content-Type: text/html\n"
@@ -66,10 +68,22 @@ def clientThread(conn, addr):
 				conn.send(bytes(outputData[i], 'ascii'))
 
 	except IOError:
+
+		f = open('notfound.htm')
+		print('File not found')
+
+		outputData = f.read()
+			
+		print('Sending response to client')
+
 		# Notify user
 		conn.send(bytes("HTTP/1.1 404 Not Found\n"
 			+"Content-Type: text/html\n"
 			+"\n", 'ascii'))
+
+		# Send contents of the requested file to the client
+		for i in range(0, len(outputData)):
+			conn.send(bytes(outputData[i], 'ascii'))
 
 	# Close socket
 	print('Closing socket')
@@ -86,12 +100,11 @@ s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 # Bind socket
 try:
 	s.bind((HOST, int(PORT)))
+	print('Socket bind successful')
 
 except socket.error as msg:
 	print('Bind failed: ' + str(msg))
 	sys.exit()
-
-print('Socket bind successful')
 
 # Start listening
 s.listen(1)

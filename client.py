@@ -28,6 +28,10 @@ rtt_start = time.clock()
 rtt_stop = 0
 rtt = 0
 
+#
+# MAIN
+#
+
 # Set up socket
 print('Initializing client')
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -60,6 +64,7 @@ try:
 			print('Host replied: ')
 			print(msg)
 
+			# Calculate RTT in ms
 			rtt_stop = time.clock()
 			rtt = (rtt_stop - rtt_start) * 1000
 			rtt = round(rtt, 3)
